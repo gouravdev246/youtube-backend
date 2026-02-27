@@ -1,4 +1,5 @@
 const ChatSession = require('../model/ChatSession.model');
+const User = require('../model/user.model');
 const VideoSummary = require('../model/VideoSummary');
 const { fetchYouTubeComments } = require('../services/youtubeService');
 const { filterComments } = require('../services/filterService');
@@ -15,6 +16,19 @@ const createChatSession = async (req, res) => {
             return res.status(400).json({ error: 'videoId is required.' });
         }
 
+        // Check and decrement usage limit
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found.' });
+        }
+
+        if (user.usageLimit <= 0) {
+            return res.status(403).json({
+                error: 'Usage limit reached.',
+                message: 'You have used your 4 free credits. Please contact support to upgrade.'
+            });
+        }
+
         const newSession = await ChatSession.create({
             userId,
             videoId,
@@ -22,10 +36,15 @@ const createChatSession = async (req, res) => {
             messages: []
         });
 
+        // Decrement limit after successful creation
+        user.usageLimit -= 1;
+        await user.save();
+
         return res.status(201).json({
             chatId: newSession._id,
             videoId: newSession.videoId,
-            title: newSession.title
+            title: newSession.title,
+            usageLimit: user.usageLimit
         });
 
     } catch (error) {

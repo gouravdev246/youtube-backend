@@ -14,6 +14,7 @@ const dbConnect = async () => {
             retryWrites: true,
             writeConcern: { w: "majority" },
         };
+        
 
         const db = await mongoose.connect(process.env.DB_URI, options);
         isConnected = db.connections[0].readyState;
