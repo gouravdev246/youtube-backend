@@ -14,7 +14,7 @@ const fetchYouTubeComments = async (videoId) => {
             params: {
                 part: 'snippet',
                 videoId: videoId,
-                maxResults: 100, // Fetch up to 100 comments
+                maxResults: 200, // Fetch up to 100 comments
                 key: API_KEY,
                 order: 'relevance' // Get the most relevant/top comments
             }

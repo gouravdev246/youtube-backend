@@ -1,61 +1,66 @@
+const VideoSummary = require('../model/VideoSummary');
+const ChatSession = require('../model/ChatSession.model');
 const { fetchYouTubeComments } = require('../services/youtubeService');
 const { filterComments } = require('../services/filterService');
-const { analyzeCommentsWithAI } = require('../services/aiService');
-const ChatHistory = require('../model/ChatHistory.model');
-const VideoData = require('../model/VideoData')
+const { generateMasterSummary, answerFromSummary } = require('../services/aiService');
 
 const processVideoAndChat = async (req, res) => {
     try {
-        const { videoId, userQuestion } = req.body;
+        // We now accept an optional 'chatId' if the user is continuing an old conversation
+        const { videoId, userQuestion, chatId } = req.body;
+        const userId = req.user.id; // From your JWT auth middleware
 
         if (!videoId || !userQuestion) {
             return res.status(400).json({ error: "Missing Video ID or Question." });
         }
-        // 1. Level-1 Cache: Check if we already answered this EXACT question for this video
-        const cachedChat = await ChatHistory.findOne({ videoId, question: userQuestion });
-        if (cachedChat) {
-            console.log("Serving from chat history cache...");
-            return res.status(200).json({
-                question: userQuestion,
-                answer: cachedChat.answer,
-                cached: true
+
+        // --- 1. THE BRAIN (Level-2 Cache Upgrade) ---
+        let videoRecord = await VideoSummary.findOne({ videoId });
+
+        if (videoRecord) {
+            console.log("Using cached Master Summary from DB...");
+        } else {
+            console.log(`Fetching and summarizing new video: ${videoId}...`);
+            const rawComments = await fetchYouTubeComments(videoId);
+            const cleanComments = filterComments(rawComments);
+
+            // Trigger the heavy 70B model ONCE
+            const newSummary = await generateMasterSummary(cleanComments);
+
+            videoRecord = await VideoSummary.create({
+                videoId: videoId,
+                masterSummary: newSummary
             });
         }
 
-        let aiAnswer;
-        let comments;
+        // --- 2. ASK THE AI ---
+        console.log("Analyzing with fast 8B AI model...");
+        const aiAnswer = await answerFromSummary(videoRecord.masterSummary, userQuestion);
 
-        // 2. Level-2 Cache: Check if we already have the video's comments
-        const existingVideo = await VideoData.findOne({ videoId });
-
-        if (existingVideo) {
-            console.log("Using cached comments from DB...");
-            comments = existingVideo.comments;
+        // --- 3. SESSION MEMORY MANAGEMENT ---
+        let session;
+        if (chatId) {
+            // If continuing a chat, find it in the DB
+            session = await ChatSession.findById(chatId);
         } else {
-            console.log(`Fetching new comments for video: ${videoId}...`);
-            const rawComments = await fetchYouTubeComments(videoId);
-            comments = filterComments(rawComments);
-
-            // Save video data for future questions about this same video
-            await VideoData.create({ videoId, comments });
+            // If brand new chat, initialize a new document
+            session = new ChatSession({ userId, videoId, messages: [] });
         }
 
-        // 3. Ask the AI
-        console.log("Analyzing with AI...");
-        aiAnswer = await analyzeCommentsWithAI(comments, userQuestion);
+        // Push the new conversation into the JSON array
+        session.messages.push({ role: 'user', content: userQuestion });
+        session.messages.push({ role: 'ai', content: aiAnswer });
 
-        // 4. Send response to user immediately
+        // --- 4. IMMEDIATE RESPONSE ---
         res.status(200).json({
+            chatId: session._id, // Send this back so React can update the URL!
             question: userQuestion,
             answer: aiAnswer
         });
 
-        // 5. Save this new interaction to ChatHistory in the background
-        ChatHistory.create({
-            videoId: videoId,
-            question: userQuestion,
-            answer: aiAnswer
-        }).catch(err => console.error("Database save error:", err.message));
+        // --- 5. BACKGROUND SAVE ---
+        // Notice we use .save() instead of .create() because we are updating an array
+        session.save().catch(err => console.error("Database save error:", err.message));
 
     } catch (error) {
         console.error("Controller Error:", error.message);
@@ -66,5 +71,3 @@ const processVideoAndChat = async (req, res) => {
 };
 
 module.exports = { processVideoAndChat };
-
-// module.exports = { processVideoComments };
