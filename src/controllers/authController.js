@@ -2,11 +2,13 @@ const User = require('../model/user.model')
 const OTP = require('../model/otp.model')
 const bcryptjs = require('bcryptjs')
 const jwt = require('jsonwebtoken')
+const dbConnect = require('../db/dbConnect')
 
 async function register(req, res) {
     const { name, email, password, otp } = req.body
 
     try {
+        await dbConnect(); // Ensuring DB is connected
         const user = await User.findOne({ email })
         if (user) {
             return res.status(400).json({ message: "User already exists" })
@@ -47,6 +49,7 @@ async function register(req, res) {
 async function login(req, res) {
     const { email, password } = req.body
     try {
+        await dbConnect(); // Ensure DB is connected
         const user = await User.findOne({ email })
         if (!user) {
             return res.status(400).json({ message: "User Not Found!!" })

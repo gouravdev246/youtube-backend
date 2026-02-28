@@ -3,15 +3,15 @@ const mongoose = require('mongoose');
 const otpGenerator = require('otp-generator');
 const nodemailer = require('nodemailer');
 const OTP = require('../model/otp.model');
+const dbConnect = require('../db/dbConnect');
 
 // Generate OTP and send email
 async function otpGenerat(req, res) {
     const { email } = req.body;
 
-    const otp = Math.floor(100000 + Math.random() * 900000);
-
-
     try {
+        await dbConnect(); // Ensure DB is connected before doing anything
+        const otp = Math.floor(100000 + Math.random() * 900000);
         await OTP.create({ email, otp });
 
         // Send OTP via email (replace with your email sending logic)
