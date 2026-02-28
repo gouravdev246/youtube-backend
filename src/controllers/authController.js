@@ -30,7 +30,9 @@ async function register(req, res) {
         res.cookie('token', token, {
             httpOnly: true,
             secure: true,
-            sameSite: 'none'
+            sameSite: 'none',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+            partitioned: true
         })
 
         newUser.password = undefined
@@ -67,7 +69,9 @@ async function login(req, res) {
         res.cookie('token', token, {
             httpOnly: true,
             secure: true,
-            sameSite: 'none'
+            sameSite: 'none',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+            partitioned: true
         })
 
         user.password = undefined
@@ -98,6 +102,7 @@ async function logout(req, res) {
             httpOnly: true,
             secure: true,
             sameSite: 'none',
+            partitioned: true,
             expires: new Date(0)
         });
         res.status(200).json({ message: "Logged out successfully" });
