@@ -22,6 +22,7 @@ app.use(cookieParser());
 const allowedOrigins = [
     "http://localhost:5173",
     "https://youtube-frontend-beige.vercel.app",
+    "https://youtube-frontend-woad.vercel.app",
     process.env.FRONTEND_URL
 ].filter(Boolean);
 
